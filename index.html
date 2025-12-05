@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>مكتبة المانجا</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* --- التصميم العام (Dark Mode) --- */
+        :root {
+            --primary: #ff9800; /* اللون البرتقالي المميز */
+            --bg: #000000;
+            --card: #151515;
+            --text: #eeeeee;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            padding-bottom: 50px; /* مسافة للأزرار السفلية */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- شريط العنوان العلوي --- */
+        .header {
+            background: #111;
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 2px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        
+        /* زر الرجوع في الأعلى */
+        .back-icon {
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+            display: none; /* مخفي في الصفحة الرئيسية */
+            color: var(--primary);
+        }
+
+        .header h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            flex-grow: 1;
+        }
+
+        /* --- 1. شبكة السلاسل (الشاشة الرئيسية) --- */
+        #series-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); /* عمودين */
+            gap: 15px;
+            padding: 15px;
+        }
+
+        .series-card {
+            background: var(--card);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 1px solid #333;
+            transition: transform 0.2s;
+        }
+
+        .series-card:active { transform: scale(0.96); }
+
+        .series-cover {
+            width: 100%;
+            height: 240px;
+            object-fit: cover; /* لملء الصورة بدون تمطيط */
+            display: block;
+        }
+
+        .series-info {
+            padding: 12px;
+            text-align: center;
+        }
+
+        .series-title {
+            font-weight: bold;
+            font-size: 15px;
+            color: #fff;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        /* --- 2. قائمة الفصول --- */
+        #chapters-list {
+            display: none;
+            padding: 10px;
+        }
+
+        .chapter-card {
+            background: var(--card);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .chapter-card:active { background: #222; }
+
+        /* --- 3. قارئ الصور --- */
+        #reader-view {
+            display: none;
+            min-height: 100vh;
+        }
+
+        #reader-view img {
+            width: 100%;
+            display: block;
+            margin: 0;
+        }
+
+        /* --- شريط التحكم السفلي للقارئ --- */
+        .reader-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none; /* يظهر فقط عند القراءة */
+            gap: 10px;
+            z-index: 200;
+        }
+
+        .float-btn {
+            background: rgba(20, 20, 20, 0.9);
+            color: white;
+            border: 1px solid var(--primary);
+            padding: 10px 25px;
+            border-radius: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        /* رسالة التحميل */
+        .loader {
+            text-align: center;
+            padding: 40px;
+            color: #777;
+            font-size: 14px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="back-icon" id="headerBackBtn" onclick="goBack()">➜</div>
+        <h2 id="pageTitle">مكتبة المانجا 📚</h2>
+    </div>
+
+    <div id="series-grid">
+        <div class="loader">جاري تحميل المكتبة...</div>
+    </div>
+
+    <div id="chapters-list"></div>
+
+    <div id="reader-view"></div>
+
+    <div class="reader-controls" id="readerControls">
+        <button class="float-btn" onclick="goBack()">🏠 القائمة</button>
+    </div>
+
+    <script>
+        // الرابط فارغ ليعمل تلقائياً مع Cloudflare
+        const API_URL = ""; 
+        
+        // متغيرات لتتبع حالة التطبيق
+        let currentView = 'series'; // series | chapters | reader
+        let currentSeriesId = null; // لتذكر المانجا الحالية عند العودة من القارئ
+        let currentSeriesTitle = "";
+
+        // توسيع التطبيق داخل تيليجرام
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.expand();
+            window.Telegram.WebApp.setHeaderColor('#111111');
+        }
+
+        // ==========================================
+        // 1. دالة التحميل الأولية (عرض المانجات)
+        // ==========================================
+        async function loadSeries() {
+            // تحديث الواجهة
+            updateUIState('series', "مكتبة المانجا 📚");
+            
+            const grid = document.getElementById('series-grid');
+            grid.innerHTML = "<div class='loader'>جاري تحميل المكتبة...</div>";
+
+            try {
+                const res = await fetch(`${API_URL}/series`);
+                const data = await res.json();
+                
+                grid.innerHTML = "";
+                
+                if (data.length === 0) {
+                    grid.innerHTML = "<div class='loader'>لا توجد مانجات مضافة في النظام</div>";
+                    return;
+                }
+
+                data.forEach(manga => {
+                    const div = document.createElement('div');
+                    div.className = 'series-card';
+                    
+                    // صورة افتراضية إذا لم يكن هناك غلاف
+                    const cover = manga.cover_url || 'https://via.placeholder.com/300x400?text=No+Cover';
+                    
+                    div.innerHTML = `
+                        <img src="${cover}" class="series-cover">
+                        <div class="series-info">
+                            <span class="series-title">${manga.title}</span>
+                        </div>
+                    `;
+                    // عند الضغط، نفتح فصول هذه السلسلة
+                    div.onclick = () => loadChapters(manga.id, manga.title);
+                    grid.appendChild(div);
+                });
+
+            } catch (e) {
+                console.error(e);
+                grid.innerHTML = `<div class='loader' style='color:red'>فشل الاتصال بالسيرفر<br><button class='float-btn' onclick='location.reload()'>تحديث</button></div>`;
+            }
+        }
+
+        // ==========================================
+        // 2. دالة عرض الفصول
+        // ==========================================
+        async function loadChapters(seriesId, seriesTitle) {
+            currentSeriesId = seriesId;
+            currentSeriesTitle = seriesTitle;
+            
+            updateUIState('chapters', seriesTitle);
+
+            const list = document.getElementById('chapters-list');
+            list.innerHTML = "<div class='loader'>جاري جلب الفصول...</div>";
+
+            try {
+                const res = await fetch(`${API_URL}/chapters/${seriesId}`);
+                const data = await res.json();
+                
+                list.innerHTML = "";
+
+                if (data.length === 0) {
+                    list.innerHTML = "<div class='loader'>لم يتم إضافة فصول لهذه المانجا بعد</div>";
+                    return;
+                }
+
+                // عكس الترتيب (اختياري) لعرض الأحدث أولاً، أو تركه كما يأتي من السيرفر
+                // data.reverse(); 
+
+                data.forEach(chap => {
+                    const div = document.createElement('div');
+                    div.className = 'chapter-card';
+                    div.innerHTML = `
+                        <b>${chap.title}</b>
+                        <span style="background:var(--primary); color:black; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold">#${chap.chapter_number}</span>
+                    `;
+                    div.onclick = () => loadPages(chap.id);
+                    list.appendChild(div);
+                });
+
+            } catch (e) {
+                list.innerHTML = "<div class='loader'>حدث خطأ في تحميل الفصول</div>";
+            }
+        }
+
+        // ==========================================
+        // 3. دالة القراءة (عرض الصور)
+        // ==========================================
+        async function loadPages(chapterId) {
+            updateUIState('reader', "وضع القراءة");
+
+            const container = document.getElementById('reader-view');
+            container.innerHTML = "<div class='loader' style='margin-top:50vh'>جاري تحميل الصفحات...</div>";
+
+            try {
+                const res = await fetch(`${API_URL}/pages/${chapterId}`);
+                const data = await res.json();
+                
+                container.innerHTML = "";
+
+                if (data.pages.length === 0) {
+                    container.innerHTML = "<div class='loader'>هذا الفصل فارغ!</div>";
+                    return;
+                }
+
+                data.pages.forEach(url => {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.loading = "lazy"; // تسريع الأداء
+                    container.appendChild(img);
+                });
+
+                // الصعود لأعلى الصفحة لبدء القراءة
+                window.scrollTo(0, 0);
+
+            } catch (e) {
+                container.innerHTML = "<div class='loader'>فشل تحميل الصور</div>";
+            }
+        }
+
+        // ==========================================
+        // دوال التحكم والتنقل
+        // ==========================================
+        
+        // دالة مركزية لتحديث حالة الشاشة (إظهار/إخفاء العناصر)
+        function updateUIState(view, title) {
+            currentView = view;
+            
+            // تحديث العنوان
+            document.getElementById('pageTitle').innerText = title;
+
+            // إظهار زر الرجوع فقط إذا لم نكن في الصفحة الرئيسية
+            document.getElementById('headerBackBtn').style.display = (view === 'series') ? 'none' : 'block';
+
+            // تبديل الشاشات
+            document.getElementById('series-grid').style.display = (view === 'series') ? 'grid' : 'none';
+            document.getElementById('chapters-list').style.display = (view === 'chapters') ? 'block' : 'none';
+            document.getElementById('reader-view').style.display = (view === 'reader') ? 'block' : 'none';
+            
+            // إظهار أزرار القارئ فقط في وضع القراءة
+            document.getElementById('readerControls').style.display = (view === 'reader') ? 'flex' : 'none';
+        }
+
+        // دالة الرجوع للخلف
+        function goBack() {
+            if (currentView === 'reader') {
+                // إذا كنا نقرأ، نعود لقائمة الفصول الخاصة بنفس المانجا
+                loadChapters(currentSeriesId, currentSeriesTitle);
+            } else if (currentView === 'chapters') {
+                // إذا كنا في الفصول، نعود للمكتبة الرئيسية
+                loadSeries();
+            }
+        }
+
+        // التشغيل التلقائي عند فتح التطبيق
+        loadSeries();
+
+    </script>
+</body>
+</html>
