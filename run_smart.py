@@ -42,7 +42,7 @@ def main():
 
     # 1. تشغيل قاعدة البيانات (في الخلفية)
     print("📦 تشغيل PocketBase...")
-    pb_process = subprocess.Popen(["pocketbase", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    pb_process = subprocess.Popen(["pocketbase", "serve"])
 
     # 2. تشغيل البايثون (في الخلفية)
     print("🐍 تشغيل FastAPI...")
