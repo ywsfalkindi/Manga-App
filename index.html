@@ -6,11 +6,9 @@
     <title>Manga Hub 🐉</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link rel="manifest" href="/manifest.json">
     <style>
         :root {
             --primary: #ff5722;
-            --primary-g: linear-gradient(45deg, #ff5722, #ff9100);
             --bg: #0a0a0a;
             --card: #161616;
             --text: #ffffff;
@@ -23,12 +21,13 @@
             color: var(--text);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
-            padding-bottom: 80px; /* مسافة للنافبار */
+            padding-bottom: 80px;
             -webkit-tap-highlight-color: transparent;
             overflow-x: hidden;
+            user-select: none;
         }
 
-        /* --- Header & Search --- */
+        /* --- Components --- */
         .header {
             background: rgba(16, 16, 16, 0.95);
             backdrop-filter: blur(10px);
@@ -39,227 +38,145 @@
             border-bottom: 1px solid #333;
             display: flex;
             align-items: center;
-            gap: 10px;
         }
 
         .search-bar {
-            flex-grow: 1;
+            width: 100%;
             background: #222;
             border: none;
-            padding: 10px 15px;
-            border-radius: 20px;
+            padding: 12px 15px;
+            border-radius: 12px;
             color: white;
-            font-size: 14px;
+            font-size: 16px;
             transition: 0.3s;
         }
         .search-bar:focus { outline: 2px solid var(--primary); background: #333; }
 
-        .back-btn { 
-            font-size: 24px; cursor: pointer; color: var(--primary); 
-            display: none; /* يظهر بالجافاسكربت */
-        }
-
-        /* --- Grid & Cards --- */
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 12px;
             padding: 15px;
         }
 
         .card {
             background: var(--card);
-            border-radius: 15px;
+            border-radius: 12px;
             overflow: hidden;
             position: relative;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
             cursor: pointer;
         }
-        .card:active { transform: scale(0.97); }
+        .card img { width: 100%; height: 170px; object-fit: cover; }
+        .card-info { padding: 8px; }
+        .card-title { font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 
-        .card img {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-        }
-
-        .card-info { padding: 10px; }
-        .card-title { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-        
-        .fav-icon {
-            position: absolute;
-            top: 8px; left: 8px;
-            background: rgba(0,0,0,0.6);
-            border-radius: 50%;
-            padding: 5px;
-            color: #fff;
-            font-size: 18px;
-            cursor: pointer;
-        }
-        .fav-icon.active { color: red; }
-
-        /* --- Chapters List --- */
-        .chapter-list { padding: 10px; display: none; }
+        .chapter-list { padding: 10px; }
         .chapter-item {
             background: var(--card);
             padding: 15px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             border-radius: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-right: 4px solid #333;
-            transition: 0.2s;
         }
-        .chapter-item.read { border-right-color: var(--primary); color: #888; }
-        .chapter-item:active { background: #252525; }
+        .chapter-item:active { background: #333; }
 
         /* --- Reader --- */
-        #reader-view { display: none; min-height: 100vh; background: black; }
-        #reader-view img { width: 100%; display: block; max-width: 800px; margin: 0 auto; }
-
-        .nav-controls {
-            display: flex;
-            justify-content: space-between;
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
+        #reader-view { min-height: 100vh; background: black; }
+        #pages-container img { width: 100%; display: block; max-width: 800px; margin: 0 auto; }
         
-        .nav-btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        .nav-controls {
+            display: flex; justify-content: space-between; padding: 20px;
+            max-width: 800px; margin: 0 auto;
         }
-        .nav-btn:disabled { background: #444; cursor: not-allowed; }
+        .nav-btn {
+            background: var(--primary); color: white; border: none;
+            padding: 10px 25px; border-radius: 25px; font-weight: bold; cursor: pointer;
+        }
+        .nav-btn:disabled { background: #444; }
 
-        /* --- Bottom Navigation --- */
+        /* --- Bottom Nav --- */
         .bottom-nav {
-            position: fixed;
-            bottom: 0; left: 0; right: 0;
+            position: fixed; bottom: 0; left: 0; right: 0;
             height: var(--nav-h);
-            background: rgba(15, 15, 15, 0.95);
-            backdrop-filter: blur(10px);
+            background: rgba(16, 16, 16, 0.98);
             border-top: 1px solid #333;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
+            display: flex; justify-content: space-around; align-items: center;
             z-index: 200;
         }
-
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            color: var(--text-sec);
-            font-size: 11px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-        .nav-item span { font-size: 24px; margin-bottom: 2px; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-sec); font-size: 11px; }
         .nav-item.active { color: var(--primary); }
+        .nav-item span { font-size: 24px; margin-bottom: 2px; }
 
-        /* --- Loader --- */
-        .loader { text-align: center; padding: 40px; color: var(--text-sec); }
+        .loader { text-align: center; padding: 40px; color: #666; }
         .hidden { display: none !important; }
-
     </style>
 </head>
 <body>
 
+    <!-- Header -->
     <div class="header" id="mainHeader">
-        <span class="material-icons-round back-btn" id="backBtn" onclick="goBack()">arrow_forward</span>
         <input type="text" class="search-bar" id="searchBox" placeholder="ابحث عن مانجا..." oninput="filterSeries()">
     </div>
 
+    <!-- Views -->
     <div id="home-view">
         <div class="grid" id="series-grid"></div>
     </div>
 
     <div id="favorites-view" class="hidden">
-        <div class="loader" id="fav-loader">لا توجد مفضلات بعد 💔</div>
+        <div class="loader" id="fav-loader">لا توجد مفضلات</div>
         <div class="grid" id="fav-grid"></div>
     </div>
 
-    <div id="history-view" class="hidden">
-        <div class="loader" id="hist-loader">سجلك فارغ</div>
-        <div class="chapter-list" id="hist-list" style="display:block"></div>
-    </div>
-
     <div id="chapters-view" class="hidden">
-        <div class="chapter-list" id="chapters-list" style="display:block"></div>
+        <div class="chapter-list" id="chapters-list"></div>
     </div>
 
     <div id="reader-view" class="hidden">
         <div id="pages-container"></div>
         <div class="nav-controls">
             <button class="nav-btn" id="prevChapBtn" onclick="navChapter(-1)">السابق</button>
-            <button class="nav-btn" id="nextChapBtn" onclick="navChapter(1)">التالي ➜</button>
+            <button class="nav-btn" id="nextChapBtn" onclick="navChapter(1)">التالي</button>
         </div>
     </div>
 
+    <!-- Bottom Nav -->
     <div class="bottom-nav" id="bottomNav">
         <div class="nav-item active" onclick="switchTab('home')">
-            <span class="material-icons-round">home</span>
-            الرئيسية
+            <span class="material-icons-round">home</span>الرئيسية
         </div>
         <div class="nav-item" onclick="switchTab('favorites')">
-            <span class="material-icons-round">favorite</span>
-            المفضلة
-        </div>
-        <div class="nav-item" onclick="switchTab('history')">
-            <span class="material-icons-round">history</span>
-            السجل
+            <span class="material-icons-round">favorite</span>المفضلة
         </div>
     </div>
 
     <script>
-        const API_URL = "";
+        // API URL is relative since we serve HTML from FastAPI
+        const API_URL = ""; 
         
-        // --- State Management ---
         let allSeries = [];
         let currentChapters = [];
         let currentSeriesId = null;
         let currentChapterIndex = -1;
         
-        // LocalStorage helpers
-        const DB = {
-            getFavs: () => JSON.parse(localStorage.getItem('manga_favs') || '[]'),
-            toggleFav: (id) => {
-                let favs = DB.getFavs();
-                if (favs.includes(id)) favs = favs.filter(x => x !== id);
-                else favs.push(id);
-                localStorage.setItem('manga_favs', JSON.stringify(favs));
-                renderSeries(allSeries); // Refresh UI
-                loadFavorites(); // Refresh Fav Tab
-            },
-            getHistory: () => JSON.parse(localStorage.getItem('manga_history') || '{}'),
-            saveHistory: (seriesId, chapterId, chapterTitle, seriesTitle) => {
-                let hist = DB.getHistory();
-                hist[seriesId] = { chapterId, chapterTitle, seriesTitle, date: new Date().getTime() };
-                localStorage.setItem('manga_history', JSON.stringify(hist));
-            }
-        };
-
         // --- Init ---
         async function init() {
             if (window.Telegram?.WebApp) {
+                window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
                 window.Telegram.WebApp.setHeaderColor('#101010');
+                
+                // إعداد زر الرجوع الخاص بتيليجرام
+                window.Telegram.WebApp.BackButton.onClick(goBack);
             }
             await fetchSeries();
-            loadHistory();
         }
 
-        // --- Core Functions ---
+        // --- Core Logic ---
         async function fetchSeries() {
             const grid = document.getElementById('series-grid');
             grid.innerHTML = "<div class='loader'>جاري التحميل...</div>";
@@ -268,238 +185,131 @@
                 allSeries = await res.json();
                 renderSeries(allSeries);
             } catch (e) {
-                grid.innerHTML = "<div class='loader'>فشل الاتصال</div>";
+                grid.innerHTML = "<div class='loader'>تأكد من تشغيل الخادم</div>";
             }
         }
 
-        function renderSeries(list, targetGridId = 'series-grid') {
-            const grid = document.getElementById(targetGridId);
+        function renderSeries(list, target = 'series-grid') {
+            const grid = document.getElementById(target);
             grid.innerHTML = "";
-            const favs = DB.getFavs();
-
-            if(list.length === 0 && targetGridId === 'series-grid') {
-                grid.innerHTML = "<div class='loader'>لا توجد نتائج</div>";
-                return;
-            }
-
+            if(list.length === 0) { grid.innerHTML = "<div class='loader'>لا توجد نتائج</div>"; return; }
+            
             list.forEach(m => {
-                const isFav = favs.includes(m.id);
                 const div = document.createElement('div');
                 div.className = 'card';
                 div.innerHTML = `
-                    <span class="material-icons-round fav-icon ${isFav ? 'active' : ''}" 
-                          onclick="event.stopPropagation(); DB.toggleFav('${m.id}')">
-                          ${isFav ? 'favorite' : 'favorite_border'}
-                    </span>
-                    <img src="${m.cover_url || 'https://via.placeholder.com/300x400?text=Manga'}" loading="lazy">
-                    <div class="card-info">
-                        <span class="card-title">${m.title}</span>
-                    </div>
+                    <img src="${m.cover_url || 'https://via.placeholder.com/200x300?text=Cover'}" loading="lazy">
+                    <div class="card-info"><span class="card-title">${m.title}</span></div>
                 `;
                 div.onclick = () => openSeries(m);
                 grid.appendChild(div);
             });
         }
 
-        // --- Tabs Logic ---
-        function switchTab(tab) {
-            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-
-            // Hide all main views
-            ['home-view', 'favorites-view', 'history-view', 'chapters-view', 'reader-view'].forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
-
-            // Show selected
-            if (tab === 'home') document.getElementById('home-view').classList.remove('hidden');
-            if (tab === 'favorites') {
-                document.getElementById('favorites-view').classList.remove('hidden');
-                loadFavorites();
-            }
-            if (tab === 'history') {
-                document.getElementById('history-view').classList.remove('hidden');
-                loadHistory();
-            }
-
-            // Reset specific UI elements
-            document.getElementById('backBtn').style.display = 'none';
-            document.getElementById('bottomNav').style.display = 'flex';
-            document.getElementById('searchBox').style.display = 'block';
-        }
-
-        function loadFavorites() {
-            const favIds = DB.getFavs();
-            const favList = allSeries.filter(s => favIds.includes(s.id));
-            const loader = document.getElementById('fav-loader');
-            
-            if (favList.length > 0) {
-                loader.style.display = 'none';
-                renderSeries(favList, 'fav-grid');
-            } else {
-                loader.style.display = 'block';
-                document.getElementById('fav-grid').innerHTML = '';
-            }
-        }
-
-        function loadHistory() {
-            const hist = DB.getHistory();
-            const listDiv = document.getElementById('hist-list');
-            const loader = document.getElementById('hist-loader');
-            
-            // Sort by date desc
-            const entries = Object.entries(hist).sort((a,b) => b[1].date - a[1].date);
-            
-            if (entries.length > 0) {
-                loader.style.display = 'none';
-                listDiv.innerHTML = "";
-                entries.forEach(([sId, data]) => {
-                    const div = document.createElement('div');
-                    div.className = 'chapter-item';
-                    div.innerHTML = `
-                        <div>
-                            <b>${data.seriesTitle}</b><br>
-                            <small style="color:var(--primary)">${data.chapterTitle}</small>
-                        </div>
-                        <span class="material-icons-round">play_arrow</span>
-                    `;
-                    div.onclick = () => {
-                        // Must fetch chapters first to know index
-                        openSeries({id: sId, title: data.seriesTitle}, true, data.chapterId);
-                    };
-                    listDiv.appendChild(div);
-                });
-            } else {
-                loader.style.display = 'block';
-            }
-        }
-
-        // --- Series & Chapters ---
-        async function openSeries(series, autoOpenChapter = false, targetChapterId = null) {
+        async function openSeries(series) {
             currentSeriesId = series.id;
-            
-            // UI Transition
-            document.getElementById('home-view').classList.add('hidden');
-            document.getElementById('favorites-view').classList.add('hidden');
-            document.getElementById('history-view').classList.add('hidden');
-            document.getElementById('chapters-view').classList.remove('hidden');
-            
-            document.getElementById('backBtn').style.display = 'block';
-            document.getElementById('searchBox').style.display = 'none'; // Hide search in chapters
+            updateView('chapters');
             
             const list = document.getElementById('chapters-list');
-            list.innerHTML = "<div class='loader'>جاري جلب الفصول...</div>";
+            list.innerHTML = `<div class='loader'>جاري جلب فصول ${series.title}...</div>`;
 
             try {
                 const res = await fetch(`${API_URL}/chapters/${series.id}`);
                 currentChapters = await res.json();
                 
-                // Check history for "read" status
-                const hist = DB.getHistory();
-                const lastReadId = hist[series.id]?.chapterId;
-
-                list.innerHTML = `
-                    <div style="padding:10px; font-weight:bold; font-size:18px;">${series.title}</div>
-                `;
-
-                if(currentChapters.length === 0) {
-                    list.innerHTML += "<div class='loader'>لا توجد فصول</div>";
-                    return;
-                }
+                list.innerHTML = `<h3 style="margin:10px; color:var(--primary)">${series.title}</h3>`;
+                
+                if(currentChapters.length === 0) list.innerHTML += "<div class='loader'>لا توجد فصول بعد</div>";
 
                 currentChapters.forEach((chap, idx) => {
-                    const isRead = lastReadId === chap.id;
                     const div = document.createElement('div');
-                    div.className = `chapter-item ${isRead ? 'read' : ''}`;
-                    div.innerHTML = `
-                        <span>${chap.title}</span>
-                        <span style="font-size:12px; opacity:0.7">#${chap.chapter_number}</span>
-                    `;
-                    div.onclick = () => openReader(idx, series.title);
+                    div.className = 'chapter-item';
+                    div.innerHTML = `<span>${chap.title}</span> <small>#${chap.chapter_number}</small>`;
+                    div.onclick = () => openReader(idx);
                     list.appendChild(div);
                 });
-
-                if (autoOpenChapter && targetChapterId) {
-                    const idx = currentChapters.findIndex(c => c.id === targetChapterId);
-                    if (idx !== -1) openReader(idx, series.title);
-                }
-
-            } catch (e) {
-                list.innerHTML = "<div class='loader'>حدث خطأ</div>";
-            }
+            } catch (e) { list.innerHTML = "خطأ في الاتصال"; }
         }
 
-        // --- Reader ---
-        async function openReader(index, seriesTitle) {
+        async function openReader(index) {
             currentChapterIndex = index;
-            const chapter = currentChapters[index];
-            
-            // UI
-            document.getElementById('chapters-view').classList.add('hidden');
-            document.getElementById('reader-view').classList.remove('hidden');
-            document.getElementById('bottomNav').style.display = 'none'; // Hide nav while reading
+            updateView('reader');
             
             const container = document.getElementById('pages-container');
-            container.innerHTML = "<div class='loader' style='margin-top:50vh'>جاري التحميل...</div>";
+            container.innerHTML = "<div class='loader' style='padding-top:50vh'>جاري تحميل الصور...</div>";
 
             try {
-                const res = await fetch(`${API_URL}/pages/${chapter.id}`);
+                const chap = currentChapters[index];
+                const res = await fetch(`${API_URL}/pages/${chap.id}`);
                 const data = await res.json();
                 
                 container.innerHTML = "";
                 data.pages.forEach(url => {
                     const img = document.createElement('img');
                     img.src = url;
-                    img.loading = "lazy";
+                    img.loading = "lazy"; // تحسين الأداء
                     container.appendChild(img);
                 });
-
+                
                 window.scrollTo(0,0);
                 
-                // Save History
-                DB.saveHistory(currentSeriesId, chapter.id, chapter.title, seriesTitle);
-                
-                // Setup Nav Buttons
+                // أزرار التنقل
                 document.getElementById('prevChapBtn').disabled = (index === 0);
                 document.getElementById('nextChapBtn').disabled = (index === currentChapters.length - 1);
-
-            } catch (e) {
-                container.innerHTML = "<div class='loader'>فشل تحميل الصور</div>";
-            }
+                
+            } catch (e) { container.innerHTML = "<div class='loader'>فشل تحميل الفصل</div>"; }
         }
 
         function navChapter(delta) {
             const newIndex = currentChapterIndex + delta;
-            if (newIndex >= 0 && newIndex < currentChapters.length) {
-                // Find title from current list (bit hacky but works)
-                // Better to store seriesTitle globally
-                const title = document.querySelector('#chapters-list div').innerText; 
-                openReader(newIndex, title);
+            if (newIndex >= 0 && newIndex < currentChapters.length) openReader(newIndex);
+        }
+
+        // --- Navigation Logic ---
+        function updateView(viewName) {
+            // إخفاء الكل
+            ['home-view', 'favorites-view', 'chapters-view', 'reader-view'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            
+            // إظهار المطلوب
+            if (viewName === 'home') document.getElementById('home-view').classList.remove('hidden');
+            if (viewName === 'favorites') document.getElementById('favorites-view').classList.remove('hidden');
+            if (viewName === 'chapters') document.getElementById('chapters-view').classList.remove('hidden');
+            if (viewName === 'reader') document.getElementById('reader-view').classList.remove('hidden');
+
+            // التحكم في العناصر العامة
+            const isMain = ['home', 'favorites'].includes(viewName);
+            document.getElementById('bottomNav').style.display = viewName === 'reader' ? 'none' : 'flex';
+            document.getElementById('mainHeader').style.display = viewName === 'reader' ? 'none' : 'flex';
+            
+            // زر الرجوع في تيليجرام
+            if (window.Telegram?.WebApp?.BackButton) {
+                if (isMain) window.Telegram.WebApp.BackButton.hide();
+                else window.Telegram.WebApp.BackButton.show();
             }
         }
 
-        // --- Navigation ---
         function goBack() {
             const reader = document.getElementById('reader-view');
             const chapters = document.getElementById('chapters-view');
             
             if (!reader.classList.contains('hidden')) {
-                // From Reader -> Chapters
-                reader.classList.add('hidden');
-                chapters.classList.remove('hidden');
-                document.getElementById('bottomNav').style.display = 'flex';
+                updateView('chapters');
             } else if (!chapters.classList.contains('hidden')) {
-                // From Chapters -> Home
-                chapters.classList.add('hidden');
-                document.getElementById('home-view').classList.remove('hidden');
-                document.getElementById('backBtn').style.display = 'none';
-                document.getElementById('searchBox').style.display = 'block';
+                updateView('home');
             }
         }
 
+        function switchTab(tab) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            updateView(tab);
+        }
+
         function filterSeries() {
-            const query = document.getElementById('searchBox').value.toLowerCase();
-            const filtered = allSeries.filter(s => s.title.toLowerCase().includes(query));
+            const q = document.getElementById('searchBox').value.toLowerCase();
+            const filtered = allSeries.filter(s => s.title.toLowerCase().includes(q));
             renderSeries(filtered);
         }
 

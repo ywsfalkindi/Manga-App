@@ -1,79 +1,101 @@
 import os
-import requests
+import asyncio
+import aiohttp
 from pocketbase import PocketBase
+from dotenv import load_dotenv
 
-# ---------------- إعداداتك ----------------
-# 1. توكن البوت الخاص بك
-TELEGRAM_BOT_TOKEN = "8319175055:AAHvNflC34EurD-_z_0y5Kvh491UaHfO7MU"
+# تحميل الإعدادات
+load_dotenv()
 
-# 2. الاتصال بـ PocketBase المحلي
-pb = PocketBase("http://127.0.0.1:8090")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("MY_CHAT_ID")
+PB_URL = os.getenv("PB_URL")
 
-# ---------------- الوظائف ----------------
+if not TOKEN or not CHAT_ID:
+    print("❌ خطأ: تأكد من إعداد ملف .env")
+    exit()
 
-def send_photo_to_telegram(image_path):
-    """يرسل صورة للبوت ويعيد الـ File ID"""
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-    # نرسل الصورة إلى "نفس البوت" (نستخدم chat_id وهمي أو خاص بك، البوت يقبل الإرسال لنفسه أحياناً أو لقناة)
-    # الأسهل هنا: سنرسلها لقناة خاصة أو لك أنت شخصياً
-    # لكن لتبسيط الأمور: سنستخدم خدعة getUpdates التي استخدمناها سابقاً، أو نرسلها لـ chat_id الخاص بك
-    # 🔴 لكي يعمل هذا السكربت، يجب أن تضع Chat ID خاص بك (يمكنك معرفته من @RawDataBot)
-    chat_id = "1494578430" 
+pb = PocketBase(PB_URL)
+
+async def upload_image_to_telegram(session, file_path, page_num):
+    """رفع صورة واحدة لتيليجرام"""
+    url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
+    data = aiohttp.FormData()
+    data.add_field('chat_id', CHAT_ID)
+    data.add_field('photo', open(file_path, 'rb'))
     
-    with open(image_path, "rb") as img:
-        payload = {"chat_id": chat_id}
-        files = {"photo": img}
-        resp = requests.post(url, data=payload, files=files).json()
-        
-    if resp["ok"]:
-        # نأخذ أكبر حجم للصورة
-        return resp["result"]["photo"][-1]["file_id"]
-    else:
-        print(f"❌ خطأ في تيليجرام: {resp}")
+    try:
+        async with session.post(url, data=data) as resp:
+            result = await resp.json()
+            if result.get("ok"):
+                # نأخذ أكبر حجم للصورة
+                file_id = result["result"]["photo"][-1]["file_id"]
+                print(f"✅ تم رفع صفحة {page_num}")
+                return {"page": page_num, "file_id": file_id}
+            else:
+                print(f"❌ فشل صفحة {page_num}: {result.get('description')}")
+                return None
+    except Exception as e:
+        print(f"❌ خطأ اتصال صفحة {page_num}: {e}")
         return None
 
-def upload_folder(folder_path, chapter_title, chapter_num):
-    print(f"🚀 جاري رفع الفصل: {chapter_title}...")
-
-    # 1. إنشاء الفصل في PocketBase
-    chapter_data = {
-        "title": chapter_title,
-        "chapter_number": chapter_num
-    }
-    chapter = pb.collection("chapters").create(chapter_data)
-    chapter_id = chapter.id
-    print(f"✅ تم إنشاء الفصل (ID: {chapter_id})")
-
-    # 2. قراءة الصور من المجلد
-    files = sorted(os.listdir(folder_path)) # ترتيب الملفات (1.jpg, 2.jpg...)
+async def main_upload(folder_path, series_id, chapter_title, chapter_num):
+    print(f"🚀 بدء رفع الفصل: {chapter_title}")
     
-    page_num = 1
-    for filename in files:
-        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+    # 1. إنشاء سجل الفصل في قاعدة البيانات
+    try:
+        chapter_data = {
+            "series_id": series_id,
+            "title": chapter_title,
+            "chapter_number": chapter_num
+        }
+        chapter = pb.collection("chapters").create(chapter_data)
+        print(f"📘 تم إنشاء الفصل ID: {chapter.id}")
+    except Exception as e:
+        print(f"❌ خطأ في إنشاء الفصل في PocketBase: {e}")
+        return
+
+    # 2. تجهيز الصور
+    files = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('jpg', 'jpeg', 'png', 'webp'))])
+    if not files:
+        print("⚠️ المجلد فارغ!")
+        return
+
+    # 3. الرفع المتوازي (الأسرع)
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for idx, filename in enumerate(files, 1):
             file_path = os.path.join(folder_path, filename)
-            print(f"   📤 جاري رفع الصفحة {page_num}: {filename}...")
-            
-            # أرسل لتيليجرام واحصل على ID
-            file_id = send_photo_to_telegram(file_path)
-            
-            if file_id:
-                # احفظ في PocketBase
+            tasks.append(upload_image_to_telegram(session, file_path, idx))
+        
+        print(f"⏳ جاري رفع {len(files)} صورة معاً...")
+        results = await asyncio.gather(*tasks)
+
+    # 4. حفظ النتائج الناجحة في قاعدة البيانات
+    success_count = 0
+    for res in results:
+        if res:
+            try:
                 pb.collection("pages").create({
-                    "chapter_id": chapter_id,
-                    "file_id": file_id,
-                    "page_number": page_num
+                    "chapter_id": chapter.id,
+                    "file_id": res["file_id"],
+                    "page_number": res["page"]
                 })
-                print(f"      ✨ تم الحفظ!")
-                page_num += 1
-            else:
-                print("      ⚠️ فشل الرفع!")
+                success_count += 1
+            except Exception as e:
+                print(f"❌ فشل حفظ صفحة {res['page']} في القاعدة: {e}")
 
-    print("\n🎉 انتهت العملية بنجاح!")
+    print(f"\n🎉 تم الانتهاء! تم رفع {success_count}/{len(files)} صفحة بنجاح.")
 
-# ---------------- التشغيل ----------------
-
-# 🔴 عدل هذا المسار لمجلد صور في جهازك
-folder_location = r"C:\Users\MTC Admin\Desktop\DragonBall_Ch100" 
-
-# تشغيل الدالة (اسم الفصل، رقم الفصل)
-# upload_folder(folder_location, "قتال مورو الأسطوري", 2)
+# --- التشغيل ---
+if __name__ == "__main__":
+    # مثال للاستخدام:
+    # 1. احصل على ID السلسلة من PocketBase Admin UI
+    # 2. ضع مسار المجلد هنا
+    
+    SERIES_ID = "YOUR_SERIES_ID_HERE" # 🔴 استبدل هذا بآيدي السلسلة من الموقع
+    FOLDER = r"C:\Users\MTC Admin\Desktop\Manga_Chapter"
+    
+    # لتشغيل السكربت، أزل التعليق عن السطر التالي:
+    # asyncio.run(main_upload(FOLDER, SERIES_ID, "الفصل الأول", 1))
+    print("🔴 قم بتعديل السطور الأخيرة في الملف لتشغيل الرفع")
