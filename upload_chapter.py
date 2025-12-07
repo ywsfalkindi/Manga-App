@@ -16,41 +16,51 @@ if not TOKEN or not CHAT_ID:
 
 pb = PocketBase(PB_URL)
 
-async def upload_image_to_telegram(session, file_path, page_num):
+async def upload_image_to_telegram(session, file_path, page_num, retries=3):
+    """رفع صورة مع إعادة المحاولة التلقائية"""
     url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
     data = aiohttp.FormData()
     data.add_field('chat_id', CHAT_ID)
     data.add_field('photo', open(file_path, 'rb'))
     
-    try:
-        async with session.post(url, data=data, timeout=60) as resp:
-            result = await resp.json()
-            if result.get("ok"):
-                file_id = result["result"]["photo"][-1]["file_id"]
-                print(f"✅ تم رفع صفحة {page_num}")
-                return {"page": page_num, "file_id": file_id}
-            else:
-                print(f"❌ فشل صفحة {page_num}: {result.get('description')}")
-                return None
-    except Exception as e:
-        print(f"❌ خطأ اتصال صفحة {page_num}: {e}")
-        return None
+    for attempt in range(retries):
+        try:
+            async with session.post(url, data=data, timeout=60) as resp:
+                result = await resp.json()
+                if result.get("ok"):
+                    file_id = result["result"]["photo"][-1]["file_id"]
+                    print(f"✅ صفحة {page_num} (تم الرفع)")
+                    return {"page": page_num, "file_id": file_id}
+                else:
+                    print(f"⚠️ فشل {page_num} (محاولة {attempt+1}): {result.get('description')}")
+        except Exception as e:
+            print(f"⚠️ خطأ اتصال {page_num} (محاولة {attempt+1}): {e}")
+        
+        await asyncio.sleep(2) # انتظار قبل المحاولة التالية
+    
+    print(f"❌ فشل نهائي للصفحة {page_num}")
+    return None
 
 async def main_upload(folder_path, series_id, chapter_title, chapter_num):
     print(f"🚀 بدء رفع الفصل: {chapter_title}")
     
     try:
+        # التحقق من وجود السلسلة أولاً
+        series = pb.collection("series").get_one(series_id)
+        print(f"📌 السلسلة: {series.title}")
+        
         chapter = pb.collection("chapters").create({
             "series_id": series_id,
             "title": chapter_title,
             "chapter_number": chapter_num
         })
-        print(f"📘 تم إنشاء الفصل ID: {chapter.id}")
+        print(f"📘 تم إنشاء سجل الفصل ID: {chapter.id}")
     except Exception as e:
-        print(f"❌ خطأ في إنشاء الفصل (تأكد من Series ID): {e}")
+        print(f"❌ خطأ: لم يتم العثور على السلسلة أو فشل إنشاء الفصل. {e}")
         return
 
     files = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('jpg', 'jpeg', 'png', 'webp'))])
+    
     if not files:
         print("⚠️ المجلد فارغ!")
         return
@@ -85,11 +95,16 @@ async def main_upload(folder_path, series_id, chapter_title, chapter_num):
     print(f"\n🎉 تم الانتهاء: {success_count}/{len(files)} صفحة.")
 
 if __name__ == "__main__":
-    # عدل هذه القيم
-    SERIES_ID = "YOUR_SERIES_ID" 
+    # --- إعدادات الرفع ---
+    # 1. احصل على SERIES_ID من لوحة تحكم PocketBase
+    SERIES_ID = "YOUR_SERIES_ID_HERE" 
+    
+    # 2. مسار مجلد الصور
     FOLDER = r"C:\Manga\OnePiece\Ch1000"
+    
+    # 3. بيانات الفصل
     CHAP_TITLE = "Chapter 1000"
     CHAP_NUM = 1000
     
     # asyncio.run(main_upload(FOLDER, SERIES_ID, CHAP_TITLE, CHAP_NUM))
-    print("⚠️ قم بفك التعليق في أسفل الملف لتشغيل الرفع")
+    print("⚠️ قم بضبط الإعدادات في الأسفل ثم أزل التعليق لتشغيل الرفع")

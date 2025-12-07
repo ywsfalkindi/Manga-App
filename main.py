@@ -1,13 +1,12 @@
 import os
-import time
-import json
 import asyncio
 import aiohttp
+import orjson
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, Response
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -18,26 +17,30 @@ PB_URL = os.getenv("PB_URL", "http://127.0.0.1:8090")
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-# الاتصال بـ Redis
+# تحديد عدد الطلبات المتزامنة لتجنب حظر تيليجرام
+TG_SEMAPHORE = asyncio.Semaphore(20) 
+
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+class ORJSONResponse(Response):
+    media_type = "application/json"
+    def render(self, content: any) -> bytes:
+        return orjson.dumps(content)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # إعداد جلسة HTTP واحدة فائقة السرعة مع Connection Pooling
+    # إعداد جلسة HTTP مع DNS caching واتصالات محسنة
     connector = aiohttp.TCPConnector(limit=500, ttl_dns_cache=300)
-    app.state.http_session = aiohttp.ClientSession(connector=connector)
-    print("🚀 Engine Started: Redis & HTTP Pool Ready")
+    app.state.http_session = aiohttp.ClientSession(connector=connector, json_serialize=orjson.dumps)
+    print("🚀 Engine Started: Redis & HTTP Pool Ready with Semaphore protection")
     yield
-    # تنظيف عند الإغلاق
     await app.state.http_session.close()
     await redis_client.close()
     print("💤 Engine Stopped")
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, default_response_class=ORJSONResponse)
 
-# تفعيل ضغط البيانات لتسريع النقل
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,43 +48,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- دوال المساعدة المتقدمة (Async + Cache) ---
+# --- دوال المساعدة المتقدمة ---
 
 async def get_cached_telegram_link(session: aiohttp.ClientSession, file_id: str):
     """
-    جلب رابط الصورة.
-    1. البحث في Redis (سرعة ميكرو ثانية).
-    2. إذا لم يوجد، طلبه من تيليجرام وحفظه في Redis.
+    جلب رابط الصورة مع الحماية من الحظر (Semaphore) والتخزين المؤقت.
     """
+    if not file_id: return "https://via.placeholder.com/200x300?text=No+Image"
+    
     cache_key = f"img:{file_id}"
     
     # 1. محاولة القراءة من الكاش
     try:
         cached_url = await redis_client.get(cache_key)
-        if cached_url:
-            return cached_url
-    except Exception:
-        pass # تجاهل أخطاء Redis واستمر
+        if cached_url: return cached_url
+    except Exception: pass
 
-    # 2. الطلب من تيليجرام في حال عدم وجوده في الكاش
+    # 2. الطلب من تيليجرام (محمي بالسيمافور)
     if not BOT_TOKEN:
         return "https://via.placeholder.com/600x800?text=No+Token"
 
     api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
-    try:
-        async with session.get(api_url) as resp:
-            data = await resp.json()
-            if data.get("ok"):
-                file_path = data["result"]["file_path"]
-                direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-                
-                # حفظ في Redis لمدة 55 دقيقة (روابط تيليجرام تنتهي بعد ساعة)
-                # استخدام Fire-and-forget للحفظ لعدم تعطيل الرد
-                asyncio.create_task(redis_client.setex(cache_key, 3300, direct_url))
-                
-                return direct_url
-    except Exception as e:
-        print(f"⚠️ Error fetching TG link: {e}")
+    
+    async with TG_SEMAPHORE: # لا يسمح بمرور أكثر من 20 طلب في نفس اللحظة
+        try:
+            async with session.get(api_url) as resp:
+                data = await resp.json()
+                if data.get("ok"):
+                    file_path = data["result"]["file_path"]
+                    direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+                    
+                    # تخزين الرابط لمدة 50 دقيقة (أقل من ساعة لضمان الأمان)
+                    asyncio.create_task(redis_client.setex(cache_key, 3000, direct_url))
+                    return direct_url
+        except Exception as e:
+            print(f"⚠️ Error fetching TG link: {e}")
     
     return "https://via.placeholder.com/600x800?text=Error"
 
@@ -98,47 +99,52 @@ async def read_root():
 @app.get("/series")
 async def get_series(q: str = Query(None, min_length=1)):
     """
-    جلب المانجا مع دعم البحث وتخزين النتائج مؤقتاً
+    جلب المانجا وتحويل cover_file_id إلى روابط حقيقية ديناميكياً
     """
     session = app.state.http_session
-    cache_key = f"api:series:{q if q else 'all'}"
+    # تقليل مدة الكاش هنا للتأكد من أن الروابط دائماً طازجة
+    cache_key = f"api:series_v2:{q if q else 'all'}"
     
-    # فحص الكاش للنتائج
     cached = await redis_client.get(cache_key)
     if cached:
-        return JSONResponse(content=json.loads(cached))
+        return ORJSONResponse(content=orjson.loads(cached))
 
-    # بناء الاستعلام لـ PocketBase
-    params = {
-        "sort": "-created",
-        "fields": "id,title,cover_url"
-    }
-    if q:
-        params["filter"] = f"title ~ '{q}'"
+    params = {"sort": "-created", "fields": "id,title,cover_file_id"} # جلب file_id
+    if q: params["filter"] = f"title ~ '{q}'"
     
     try:
         async with session.get(f"{PB_URL}/api/collections/series/records", params=params) as resp:
             data = await resp.json()
             items = data.get("items", [])
             
-            result = [{"id": r["id"], "title": r["title"], "cover_url": r["cover_url"]} for r in items]
+            # تحويل file_id إلى روابط حقيقية بشكل متوازي
+            tasks = [get_cached_telegram_link(session, item.get("cover_file_id")) for item in items]
+            cover_urls = await asyncio.gather(*tasks)
             
-            # حفظ نتيجة البحث لمدة دقيقة واحدة لتخفيف الحمل
-            await redis_client.setex(cache_key, 60, json.dumps(result))
+            # دمج النتائج
+            result = []
+            for item, url in zip(items, cover_urls):
+                result.append({
+                    "id": item["id"],
+                    "title": item["title"],
+                    "cover_url": url # إرسال الرابط الجاهز للواجهة
+                })
             
+            # كاش لمدة 5 دقائق للقائمة (الروابط داخلها صالحة لـ 50 دقيقة)
+            await redis_client.setex(cache_key, 300, orjson.dumps(result))
             return result
+            
     except Exception as e:
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/chapters/{series_id}")
 async def get_chapters(series_id: str):
     session = app.state.http_session
-    # كاش قائمة الفصول لمدة 30 ثانية فقط لأنها قد تتحدث
     cache_key = f"api:chapters:{series_id}"
     
     cached = await redis_client.get(cache_key)
-    if cached:
-        return JSONResponse(content=json.loads(cached))
+    if cached: return ORJSONResponse(content=orjson.loads(cached))
 
     params = {
         "filter": f'series_id="{series_id}"',
@@ -149,11 +155,8 @@ async def get_chapters(series_id: str):
     try:
         async with session.get(f"{PB_URL}/api/collections/chapters/records", params=params) as resp:
             data = await resp.json()
-            items = data.get("items", [])
-            
-            result = [{"id": r["id"], "title": r["title"], "chapter_number": r["chapter_number"]} for r in items]
-            
-            await redis_client.setex(cache_key, 30, json.dumps(result))
+            result = data.get("items", [])
+            await redis_client.setex(cache_key, 30, orjson.dumps(result))
             return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -162,13 +165,12 @@ async def get_chapters(series_id: str):
 async def get_pages(chapter_id: str):
     session = app.state.http_session
     
-    # 1. جلب معرفات الملفات من قاعدة البيانات
-    # نستخدم الكاش هنا أيضاً لتقليل طلبات قاعدة البيانات
+    # 1. جلب معرفات الملفات (Cache DB response)
     db_cache_key = f"db:pages:{chapter_id}"
     cached_records = await redis_client.get(db_cache_key)
     
     if cached_records:
-        records = json.loads(cached_records)
+        records = orjson.loads(cached_records)
     else:
         params = {
             "filter": f'chapter_id="{chapter_id}"',
@@ -178,21 +180,16 @@ async def get_pages(chapter_id: str):
         async with session.get(f"{PB_URL}/api/collections/pages/records", params=params) as resp:
             data = await resp.json()
             records = data.get("items", [])
-            # حفظ هيكل الفصل في الكاش لفترة طويلة (مثلاً ساعة)
-            await redis_client.setex(db_cache_key, 3600, json.dumps(records))
+            await redis_client.setex(db_cache_key, 3600, orjson.dumps(records))
 
-    if not records:
-        return {"pages": []}
+    if not records: return {"pages": []}
 
-    # 2. تحويل معرفات الملفات إلى روابط مباشرة (بشكل متوازي صاروخي)
-    # استخدام gather لتشغيل جميع الطلبات في نفس اللحظة
+    # 2. تحويل المعرفات إلى روابط (محمية بـ Semaphore داخل الدالة)
     tasks = [get_cached_telegram_link(session, r["file_id"]) for r in records]
     urls = await asyncio.gather(*tasks)
     
     return {"pages": urls}
 
-# تشغيل السيرفر (للتطوير فقط، في الإنتاج استخدم الأمر في الأسفل)
 if __name__ == "__main__":
     import uvicorn
-    # استخدام uvloop لزيادة الأداء
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

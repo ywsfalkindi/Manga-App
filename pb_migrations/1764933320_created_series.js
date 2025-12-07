@@ -33,16 +33,17 @@ migrate((app) => {
         "type": "text"
       },
       {
+        /* تم التغيير هنا: تخزين ID بدلاً من الرابط المباشر */
         "autogeneratePattern": "",
         "hidden": false,
         "id": "text1189499079",
         "max": 0,
         "min": 0,
-        "name": "cover_url",
+        "name": "cover_file_id", 
         "pattern": "",
         "presentable": false,
         "primaryKey": false,
-        "required": false,
+        "required": true, 
         "system": false,
         "type": "text"
       },
@@ -80,6 +81,5 @@ migrate((app) => {
   return app.save(collection);
 }, (app) => {
   const collection = app.findCollectionByNameOrId("pbc_218332259");
-
   return app.delete(collection);
 })
