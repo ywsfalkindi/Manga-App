@@ -1,8 +1,8 @@
 fastapi
 uvicorn[standard]
-python-multipart
 python-dotenv
-aiohttp
-redis
-uvloop; sys_platform != 'win32'
-orjson
+pydantic-settings
+aiogram
+httpx
+async-lru
+jinja2

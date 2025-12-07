@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manga Hub</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <div id="header" style="padding:15px; position:sticky; top:0; background:rgba(10,10,10,0.95); z-index:100; border-bottom:1px solid #222;">
+        <input type="text" id="search" placeholder="ابحث عن مانجا..." 
+               style="width:100%; padding:10px; border-radius:10px; border:none; background:#222; color:white;">
+    </div>
+
+    <!-- Views -->
+    <div id="home-view" class="view">
+        <div class="grid" id="series-grid"></div>
+    </div>
+
+    <div id="chapters-view" class="view hidden">
+        <div style="padding:15px;">
+            <button onclick="goBack()" class="btn" style="background:#333; color:#fff; margin-bottom:10px">back_arrow عودة</button>
+            <h2 id="series-title" style="margin:0 0 15px 0"></h2>
+            <div id="chapters-list"></div>
+        </div>
+    </div>
+
+    <div id="reader-view" class="view hidden">
+        <div id="reader-container" class="vertical"></div>
+        
+        <!-- Controls overlay -->
+        <div class="reader-controls" id="reader-ui">
+            <span id="page-indicator">1 / ?</span>
+            <span class="material-icons-round" onclick="toggleSettings()">settings</span>
+            <span class="material-icons-round" onclick="exitReader()">close</span>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="hidden settings-modal">
+        <h3>إعدادات القراءة</h3>
+        <label style="display:block; margin:10px 0;">
+            <input type="radio" name="mode" value="vertical" checked onchange="changeMode('vertical')"> عامودي (Webtoon)
+        </label>
+        <label style="display:block; margin:10px 0;">
+            <input type="radio" name="mode" value="horizontal-rtl" onchange="changeMode('horizontal-rtl')"> أفقي (يمين لليسار)
+        </label>
+        <button class="btn btn-primary" onclick="toggleSettings()" style="width:100%; margin-top:10px">إغلاق</button>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
