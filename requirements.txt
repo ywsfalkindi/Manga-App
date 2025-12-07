@@ -1,7 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
-requests
 python-dotenv
-pocketbase
 aiohttp
+redis
+uvloop; sys_platform != 'win32'
