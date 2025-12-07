@@ -1,3 +1,6 @@
+# ================================================
+# FILE: bot.py
+# ================================================
 import asyncio
 import os
 from aiogram import Bot, Dispatcher, F
@@ -16,21 +19,20 @@ dp = Dispatcher()
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    await message.answer("🤖 أهلاً بك! أرسل لي صورة المانجا (أو عدة صور) وسأقوم بإعطائك معرف الملف (File ID) لاستخدامه في قاعدة البيانات.")
+    await message.answer("🤖 أهلاً بك! أرسل لي صورة المانجا وسأقوم باستخراج المعرف (File ID).")
 
 @dp.message(F.photo)
 async def handle_photo(message: Message):
-    # الحصول على أكبر حجم للصورة
     photo: PhotoSize = message.photo[-1]
     file_id = photo.file_id
     
+    # رسالة بسيطة لسهولة النسخ
     response_text = (
-        f"📸 <b>تم استلام صورة!</b>\n"
-        f"🆔 <code>{file_id}</code>\n"
-        f"📋 اضغط على المعرف لنسخه."
+        f"🆔 معرف الصورة:\n"
+        f"<code>{file_id}</code>"
     )
     await message.reply(response_text, parse_mode="HTML")
-    print(f"✅ New Image: {file_id}")
+    print(f"✅ Extracted: {file_id[:10]}...")
 
 async def main():
     print("🚀 Bot is running...")
