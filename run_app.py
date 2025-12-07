@@ -1,3 +1,6 @@
+# ================================================
+# FILE: run_app.py
+# ================================================
 import subprocess
 import time
 import re
@@ -5,13 +8,24 @@ import os
 import sys
 import threading
 import signal
+import platform
 
 # ==========================================
 # إعدادات التشغيل
 # ==========================================
-# تأكد أن اسم ملف بوكيت بيس صحيح (قد يكون pocketbase.exe في ويندوز)
-PB_EXEC = "pocketbase.exe" if os.name == 'nt' else "./pocketbase"
-PYTHON_EXEC = sys.executable  # يستخدم نفس نسخة بايثون الحالية
+# === تحسين 5: كشف نظام التشغيل تلقائياً ===
+if platform.system() == "Windows":
+    PB_EXEC = "pocketbase.exe"
+    creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
+else:
+    PB_EXEC = "./pocketbase"
+    creation_flags = 0 # Not used in Linux
+    
+    # التأكد من صلاحية التنفيذ في لينكس
+    if os.path.exists(PB_EXEC):
+        os.chmod(PB_EXEC, 0o755)
+
+PYTHON_EXEC = sys.executable
 CLOUDFLARE_CMD = ["cloudflared", "tunnel", "--url", "http://localhost:8000"]
 
 # تخزين العمليات لإغلاقها لاحقاً
@@ -31,14 +45,13 @@ def log(msg, color="white"):
 def run_process(command, name):
     """تشغيل عملية في الخلفية"""
     try:
-        # shell=False أكثر أماناً وتحكماً في العمليات
         proc = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+            creationflags=creation_flags
         )
         processes.append(proc)
         log(f"تم تشغيل {name} بنجاح (PID: {proc.pid})", "green")
@@ -58,7 +71,6 @@ def monitor_cloudflare(proc):
         if not line:
             break
         
-        # البحث عن الرابط
         match = url_pattern.search(line)
         if match:
             public_url = match.group(0)
@@ -66,13 +78,9 @@ def monitor_cloudflare(proc):
             log(f"🔗 الرابط الجديد: {public_url}", "cyan")
             log("="*50, "cyan")
             
-            # حفظ الرابط في ملف نصي لسهولة الوصول
             with open("url.txt", "w") as f:
                 f.write(public_url)
             log("تم حفظ الرابط في ملف url.txt", "green")
-            
-            # (اختياري) بما أن الكود الجديد يستخدم مسارات نسبية،
-            # لا حاجة لتعديل ملفات JS. الموقع يعمل تلقائياً!
             log("✅ الموقع جاهز للعمل فوراً!", "green")
             break
 
@@ -80,8 +88,7 @@ def cleanup(signum, frame):
     """إغلاق جميع البرامج عند الخروج"""
     log("\nجاري إغلاق الأنظمة...", "red")
     for proc in processes:
-        if os.name == 'nt':
-            # أمر خاص لويندوز لقتل شجرة العمليات
+        if platform.system() == "Windows":
             subprocess.call(['taskkill', '/F', '/T', '/PID', str(proc.pid)])
         else:
             proc.terminate()
@@ -91,7 +98,6 @@ def cleanup(signum, frame):
 # التشغيل الرئيسي
 # ==========================================
 if __name__ == "__main__":
-    # ربط زر Ctrl+C بدالة التنظيف
     signal.signal(signal.SIGINT, cleanup)
 
     print(r"""
@@ -108,7 +114,7 @@ if __name__ == "__main__":
     # 1. تشغيل PocketBase
     log("بدء تشغيل قاعدة البيانات...", "yellow")
     run_process([PB_EXEC, "serve"], "PocketBase")
-    time.sleep(2) # انتظار قليل لتجهيز القاعدة
+    time.sleep(2)
 
     # 2. تشغيل الموقع (Backend)
     log("بدء تشغيل السيرفر (FastAPI)...", "yellow")
@@ -123,12 +129,10 @@ if __name__ == "__main__":
     cf_proc = run_process(CLOUDFLARE_CMD, "Cloudflare")
 
     if cf_proc:
-        # تشغيل خيط (Thread) لمراقبة الرابط دون تجميد البرنامج
         threading.Thread(target=monitor_cloudflare, args=(cf_proc,), daemon=True).start()
 
     log("🚀 النظام يعمل بالكامل! اضغط Ctrl+C للإيقاف.", "green")
 
-    # إبقاء السكريبت يعمل
     while True:
         try:
             time.sleep(1)

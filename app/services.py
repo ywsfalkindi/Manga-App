@@ -27,6 +27,12 @@ async def close_client():
 async def pb_get_all(collection: str, query: dict = None):
     url = f"{settings.POCKETBASE_URL}/api/collections/{collection}/records"
     params = query or {}
+    
+    # === تحسين 1: إصلاح مشكلة اختفاء الفصول ===
+    # PocketBase يرجع 30 عنصر افتراضياً. نرفع الحد إلى 500.
+    if "perPage" not in params:
+        params["perPage"] = 500
+        
     try:
         # نستخدم العميل المشترك
         resp = await shared_client.get(url, params=params)

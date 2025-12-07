@@ -50,12 +50,23 @@ body {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     z-index: 500; background: #000;
 }
+
 #reader-container.horizontal-rtl img { 
     height: 100vh; width: auto; max-width: 100vw; 
     object-fit: contain; scroll-snap-align: center; flex-shrink: 0;
 }
-/* إخفاء أزرار التنقل السفلية في الوضع الأفقي لأننا نستخدم السحب */
-#reader-container.horizontal-rtl .chapter-nav { display: none; }
+
+/* === تحسين 2: إظهار أزرار التنقل في الوضع الأفقي === */
+#reader-container.horizontal-rtl .chapter-nav { 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    min-width: 100vw;
+    height: 100vh;
+    scroll-snap-align: center;
+    flex-shrink: 0;
+    background: #111;
+}
 
 /* Navigation Buttons inside Reader */
 .chapter-nav {

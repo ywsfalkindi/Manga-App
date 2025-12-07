@@ -7,7 +7,6 @@ let state = {
     currentChapter: null,
     chapters: [],
     pages: [],
-    // التخزين المحلي يشمل الآن رقم الصفحة
     history: JSON.parse(localStorage.getItem('manga_history') || '{}'),
     settings: JSON.parse(localStorage.getItem('reader_settings') || '{"mode": "vertical"}')
 };
@@ -68,7 +67,6 @@ async function openSeries(id, title) {
         const history = state.history[id] || {};
         
         document.getElementById('chapters-list').innerHTML = state.chapters.map(c => {
-            // تمييز الفصل المقروء
             const isRead = history.lastChapter === c.id;
             const statusIcon = isRead ? '<span style="color:var(--primary); font-size:0.8em"> (واصل القراءة)</span>' : '';
             
@@ -95,7 +93,7 @@ async function loadChapter(chapterId, chapNum) {
         
         const data = await res.json();
         state.pages = data.pages;
-        state.currentChapter = { ...data, id: chapterId, chapter_number: chapNum }; // دمج البيانات
+        state.currentChapter = { ...data, id: chapterId, chapter_number: chapNum };
 
         renderPages();
     } catch (e) {
@@ -107,10 +105,26 @@ function renderPages() {
     const container = document.getElementById('reader-container');
     container.className = state.settings.mode;
     
-    // بناء الصفحات
-    container.innerHTML = state.pages.map((url, i) => `
-        <img src="${url}" loading="${i < 3 ? 'eager' : 'lazy'}" data-idx="${i}" class="manga-page">
-    `).join('');
+    // تحديد الصفحة المحفوظة سابقاً
+    const hist = state.history[state.currentSeries.id];
+    const savedPageIdx = (hist && hist.lastChapter === state.currentChapter.id) ? hist.lastPage : -1;
+
+    // === تحسين 3: معالجة الصور المكسورة + الانتقال الذكي للصفحة ===
+    container.innerHTML = state.pages.map((url, i) => {
+        // إذا كانت هذه هي الصفحة المحفوظة، نضيف حدث onload للانتقال إليها فوراً
+        const scrollAttr = (i === savedPageIdx) ? 'onload="this.scrollIntoView({block: \'start\'})"' : '';
+        
+        return `
+        <div style="position:relative; width:100%; display:flex; justify-content:center;">
+            <img src="${url}" 
+                 loading="${i < 3 || i === savedPageIdx ? 'eager' : 'lazy'}" 
+                 data-idx="${i}" 
+                 class="manga-page"
+                 ${scrollAttr}
+                 onerror="this.onerror=null; this.src='https://via.placeholder.com/600x800?text=Error+Tap+Reload'; this.onclick=function(){location.reload()}"
+            >
+        </div>`;
+    }).join('');
 
     // إضافة أزرار التنقل السفلية
     const navDiv = document.createElement('div');
@@ -125,7 +139,8 @@ function renderPages() {
     container.appendChild(navDiv);
 
     setupObserver();
-    restoreProgress();
+    // احتياطي في حال فشل onload
+    if (savedPageIdx > 0) setTimeout(restoreProgress, 500);
 }
 
 function setupObserver() {
@@ -134,28 +149,20 @@ function setupObserver() {
             if (entry.isIntersecting) {
                 const idx = parseInt(entry.target.dataset.idx);
                 document.getElementById('page-indicator').innerText = `${idx + 1} / ${state.pages.length}`;
-                // حفظ التقدم: السلسلة -> الفصل -> رقم الصفحة
                 saveProgress(state.currentSeries.id, state.currentChapter.id, idx);
             }
         });
-    }, { threshold: 0.1 }); // حساسية 10%
+    }, { threshold: 0.1 });
 
     document.querySelectorAll('.manga-page').forEach(img => observer.observe(img));
 }
 
 function restoreProgress() {
     const hist = state.history[state.currentSeries.id];
-    // إذا كان هذا هو نفس الفصل المحفوظ ولديه صفحة محفوظة
     if (hist && hist.lastChapter === state.currentChapter.id && hist.lastPage > 0) {
         const target = document.querySelector(`img[data-idx="${hist.lastPage}"]`);
         if (target) {
-            setTimeout(() => target.scrollIntoView({ behavior: 'auto', block: 'start' }), 100);
-            // إشعار بسيط للمستخدم
-            const toast = document.createElement('div');
-            toast.innerText = `تم استكمال القراءة من صفحة ${hist.lastPage + 1}`;
-            toast.style.cssText = "position:fixed; top:70px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:5px 10px; border-radius:5px; font-size:12px; z-index:999";
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2000);
+            target.scrollIntoView({ behavior: 'auto', block: 'start' });
         }
     }
 }

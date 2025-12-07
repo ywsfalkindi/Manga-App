@@ -31,4 +31,5 @@ async def read_index():
     return FileResponse("static/index.html")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # === تحسين 4: إيقاف reload لتحسين الأداء في الإنتاج ===
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
