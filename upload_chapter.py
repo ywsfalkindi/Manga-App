@@ -4,31 +4,28 @@ import aiohttp
 from pocketbase import PocketBase
 from dotenv import load_dotenv
 
-# تحميل الإعدادات
 load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("MY_CHAT_ID")
-PB_URL = os.getenv("PB_URL")
+PB_URL = os.getenv("PB_URL", "http://127.0.0.1:8090")
 
 if not TOKEN or not CHAT_ID:
-    print("❌ خطأ: تأكد من إعداد ملف .env")
+    print("❌ خطأ: تأكد من إعداد ملف .env بـ TOKEN و CHAT_ID")
     exit()
 
 pb = PocketBase(PB_URL)
 
 async def upload_image_to_telegram(session, file_path, page_num):
-    """رفع صورة واحدة لتيليجرام"""
     url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
     data = aiohttp.FormData()
     data.add_field('chat_id', CHAT_ID)
     data.add_field('photo', open(file_path, 'rb'))
     
     try:
-        async with session.post(url, data=data) as resp:
+        async with session.post(url, data=data, timeout=60) as resp:
             result = await resp.json()
             if result.get("ok"):
-                # نأخذ أكبر حجم للصورة
                 file_id = result["result"]["photo"][-1]["file_id"]
                 print(f"✅ تم رفع صفحة {page_num}")
                 return {"page": page_num, "file_id": file_id}
@@ -42,36 +39,40 @@ async def upload_image_to_telegram(session, file_path, page_num):
 async def main_upload(folder_path, series_id, chapter_title, chapter_num):
     print(f"🚀 بدء رفع الفصل: {chapter_title}")
     
-    # 1. إنشاء سجل الفصل في قاعدة البيانات
+    # 1. إنشاء الفصل
     try:
-        chapter_data = {
+        chapter = pb.collection("chapters").create({
             "series_id": series_id,
             "title": chapter_title,
             "chapter_number": chapter_num
-        }
-        chapter = pb.collection("chapters").create(chapter_data)
+        })
         print(f"📘 تم إنشاء الفصل ID: {chapter.id}")
     except Exception as e:
-        print(f"❌ خطأ في إنشاء الفصل في PocketBase: {e}")
+        print(f"❌ خطأ في إنشاء الفصل: {e}")
         return
 
-    # 2. تجهيز الصور
+    # 2. قراءة الملفات
     files = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('jpg', 'jpeg', 'png', 'webp'))])
     if not files:
         print("⚠️ المجلد فارغ!")
         return
 
-    # 3. الرفع المتوازي (الأسرع)
+    # 3. الرفع المتوازي (محدد بـ 5 صور متزامنة لتجنب حظر تيليجرام)
     async with aiohttp.ClientSession() as session:
         tasks = []
         for idx, filename in enumerate(files, 1):
             file_path = os.path.join(folder_path, filename)
             tasks.append(upload_image_to_telegram(session, file_path, idx))
         
-        print(f"⏳ جاري رفع {len(files)} صورة معاً...")
-        results = await asyncio.gather(*tasks)
+        # تقسيم المهام إلى مجموعات (Chunks) لتجنب Flood Limit
+        results = []
+        chunk_size = 5 
+        for i in range(0, len(tasks), chunk_size):
+            chunk = tasks[i:i + chunk_size]
+            results.extend(await asyncio.gather(*chunk))
+            await asyncio.sleep(1) # استراحة قصيرة
 
-    # 4. حفظ النتائج الناجحة في قاعدة البيانات
+    # 4. حفظ الصفحات
     success_count = 0
     for res in results:
         if res:
@@ -83,19 +84,16 @@ async def main_upload(folder_path, series_id, chapter_title, chapter_num):
                 })
                 success_count += 1
             except Exception as e:
-                print(f"❌ فشل حفظ صفحة {res['page']} في القاعدة: {e}")
+                print(f"❌ خطأ حفظ في القاعدة: {e}")
 
-    print(f"\n🎉 تم الانتهاء! تم رفع {success_count}/{len(files)} صفحة بنجاح.")
+    print(f"\n🎉 تم رفع {success_count}/{len(files)} صفحة بنجاح.")
 
-# --- التشغيل ---
 if __name__ == "__main__":
-    # مثال للاستخدام:
-    # 1. احصل على ID السلسلة من PocketBase Admin UI
-    # 2. ضع مسار المجلد هنا
+    # 🔴 قم بتعديل هذه القيم قبل التشغيل
+    SERIES_ID = "YOUR_SERIES_ID_HERE" 
+    FOLDER = r"C:\Path\To\Chapter\Images"
+    CHAP_TITLE = "Chapter 1"
+    CHAP_NUM = 1
     
-    SERIES_ID = "YOUR_SERIES_ID_HERE" # 🔴 استبدل هذا بآيدي السلسلة من الموقع
-    FOLDER = r"C:\Users\MTC Admin\Desktop\Manga_Chapter"
-    
-    # لتشغيل السكربت، أزل التعليق عن السطر التالي:
-    # asyncio.run(main_upload(FOLDER, SERIES_ID, "الفصل الأول", 1))
-    print("🔴 قم بتعديل السطور الأخيرة في الملف لتشغيل الرفع")
+    # asyncio.run(main_upload(FOLDER, SERIES_ID, CHAP_TITLE, CHAP_NUM))
+    print("⚠️ قم بفك التعليق عن السطر الأخير لتشغيل الرفع")

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Manga Hub 🐉</title>
+    <title>Manga Hub ⚡</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <style>
@@ -15,79 +15,59 @@
             --text-sec: #aaaaaa;
             --nav-h: 65px;
         }
-
         body {
             background-color: var(--bg);
             color: var(--text);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding-bottom: 80px;
+            margin: 0; padding-bottom: 80px;
             -webkit-tap-highlight-color: transparent;
-            overflow-x: hidden;
             user-select: none;
         }
-
-        /* --- Components --- */
+        /* Components */
         .header {
             background: rgba(16, 16, 16, 0.95);
             backdrop-filter: blur(10px);
             padding: 15px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            position: sticky; top: 0; z-index: 100;
             border-bottom: 1px solid #333;
-            display: flex;
-            align-items: center;
+            display: flex; align-items: center;
         }
-
         .search-bar {
-            width: 100%;
-            background: #222;
-            border: none;
-            padding: 12px 15px;
-            border-radius: 12px;
-            color: white;
-            font-size: 16px;
-            transition: 0.3s;
+            width: 100%; background: #222; border: none;
+            padding: 12px 15px; border-radius: 12px;
+            color: white; font-size: 16px; transition: 0.3s;
         }
         .search-bar:focus { outline: 2px solid var(--primary); background: #333; }
 
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-            gap: 12px;
-            padding: 15px;
+            gap: 12px; padding: 15px;
         }
-
         .card {
-            background: var(--card);
-            border-radius: 12px;
-            overflow: hidden;
-            position: relative;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            cursor: pointer;
+            background: var(--card); border-radius: 12px; overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer;
+            transition: transform 0.2s;
         }
+        .card:active { transform: scale(0.96); }
         .card img { width: 100%; height: 170px; object-fit: cover; }
         .card-info { padding: 8px; }
         .card-title { font-size: 13px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 
         .chapter-list { padding: 10px; }
         .chapter-item {
-            background: var(--card);
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-right: 4px solid #333;
+            background: var(--card); padding: 15px; margin-bottom: 10px;
+            border-radius: 10px; display: flex; justify-content: space-between;
+            align-items: center; border-right: 4px solid #333;
         }
-        .chapter-item:active { background: #333; }
+        .chapter-item:active { background: #333; border-color: var(--primary); }
 
-        /* --- Reader --- */
+        /* Reader */
         #reader-view { min-height: 100vh; background: black; }
-        #pages-container img { width: 100%; display: block; max-width: 800px; margin: 0 auto; }
-        
+        #pages-container img { 
+            width: 100%; display: block; max-width: 800px; margin: 0 auto;
+            min-height: 200px; background: #111; /* Placeholder color */
+        }
         .nav-controls {
             display: flex; justify-content: space-between; padding: 20px;
             max-width: 800px; margin: 0 auto;
@@ -96,16 +76,14 @@
             background: var(--primary); color: white; border: none;
             padding: 10px 25px; border-radius: 25px; font-weight: bold; cursor: pointer;
         }
-        .nav-btn:disabled { background: #444; }
+        .nav-btn:disabled { background: #444; color: #888; }
 
-        /* --- Bottom Nav --- */
+        /* Bottom Nav */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0;
-            height: var(--nav-h);
-            background: rgba(16, 16, 16, 0.98);
-            border-top: 1px solid #333;
-            display: flex; justify-content: space-around; align-items: center;
-            z-index: 200;
+            height: var(--nav-h); background: rgba(16, 16, 16, 0.98);
+            border-top: 1px solid #333; display: flex;
+            justify-content: space-around; align-items: center; z-index: 200;
         }
         .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-sec); font-size: 11px; }
         .nav-item.active { color: var(--primary); }
@@ -117,19 +95,16 @@
 </head>
 <body>
 
-    <!-- Header -->
     <div class="header" id="mainHeader">
         <input type="text" class="search-bar" id="searchBox" placeholder="ابحث عن مانجا..." oninput="filterSeries()">
     </div>
 
-    <!-- Views -->
     <div id="home-view">
         <div class="grid" id="series-grid"></div>
     </div>
 
     <div id="favorites-view" class="hidden">
-        <div class="loader" id="fav-loader">لا توجد مفضلات</div>
-        <div class="grid" id="fav-grid"></div>
+        <div class="loader">قريباً...</div>
     </div>
 
     <div id="chapters-view" class="hidden">
@@ -144,7 +119,6 @@
         </div>
     </div>
 
-    <!-- Bottom Nav -->
     <div class="bottom-nav" id="bottomNav">
         <div class="nav-item active" onclick="switchTab('home')">
             <span class="material-icons-round">home</span>الرئيسية
@@ -155,28 +129,28 @@
     </div>
 
     <script>
-        // API URL is relative since we serve HTML from FastAPI
         const API_URL = ""; 
-        
         let allSeries = [];
         let currentChapters = [];
         let currentSeriesId = null;
         let currentChapterIndex = -1;
-        
-        // --- Init ---
+
         async function init() {
             if (window.Telegram?.WebApp) {
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
                 window.Telegram.WebApp.setHeaderColor('#101010');
-                
-                // إعداد زر الرجوع الخاص بتيليجرام
                 window.Telegram.WebApp.BackButton.onClick(goBack);
             }
+            // إضافة دعم لوحة المفاتيح
+            document.addEventListener('keydown', (e) => {
+                if(document.getElementById('reader-view').classList.contains('hidden')) return;
+                if(e.key === "ArrowLeft") navChapter(1); // التالي (لأننا RTL)
+                if(e.key === "ArrowRight") navChapter(-1); // السابق
+            });
             await fetchSeries();
         }
 
-        // --- Core Logic ---
         async function fetchSeries() {
             const grid = document.getElementById('series-grid');
             grid.innerHTML = "<div class='loader'>جاري التحميل...</div>";
@@ -185,12 +159,12 @@
                 allSeries = await res.json();
                 renderSeries(allSeries);
             } catch (e) {
-                grid.innerHTML = "<div class='loader'>تأكد من تشغيل الخادم</div>";
+                grid.innerHTML = "<div class='loader'>تأكد من تشغيل الخادم 🔴</div>";
             }
         }
 
-        function renderSeries(list, target = 'series-grid') {
-            const grid = document.getElementById(target);
+        function renderSeries(list) {
+            const grid = document.getElementById('series-grid');
             grid.innerHTML = "";
             if(list.length === 0) { grid.innerHTML = "<div class='loader'>لا توجد نتائج</div>"; return; }
             
@@ -198,7 +172,7 @@
                 const div = document.createElement('div');
                 div.className = 'card';
                 div.innerHTML = `
-                    <img src="${m.cover_url || 'https://via.placeholder.com/200x300?text=Cover'}" loading="lazy">
+                    <img src="${m.cover_url || 'https://via.placeholder.com/200x300'}" loading="lazy">
                     <div class="card-info"><span class="card-title">${m.title}</span></div>
                 `;
                 div.onclick = () => openSeries(m);
@@ -209,22 +183,17 @@
         async function openSeries(series) {
             currentSeriesId = series.id;
             updateView('chapters');
-            
             const list = document.getElementById('chapters-list');
-            list.innerHTML = `<div class='loader'>جاري جلب فصول ${series.title}...</div>`;
-
+            list.innerHTML = `<div class='loader'>جاري جلب الفصول...</div>`;
             try {
                 const res = await fetch(`${API_URL}/chapters/${series.id}`);
                 currentChapters = await res.json();
-                
                 list.innerHTML = `<h3 style="margin:10px; color:var(--primary)">${series.title}</h3>`;
-                
                 if(currentChapters.length === 0) list.innerHTML += "<div class='loader'>لا توجد فصول بعد</div>";
-
                 currentChapters.forEach((chap, idx) => {
                     const div = document.createElement('div');
                     div.className = 'chapter-item';
-                    div.innerHTML = `<span>${chap.title}</span> <small>#${chap.chapter_number}</small>`;
+                    div.innerHTML = `<span>${chap.title || 'فصل'}</span> <small>#${chap.chapter_number}</small>`;
                     div.onclick = () => openReader(idx);
                     list.appendChild(div);
                 });
@@ -234,71 +203,66 @@
         async function openReader(index) {
             currentChapterIndex = index;
             updateView('reader');
-            
             const container = document.getElementById('pages-container');
-            container.innerHTML = "<div class='loader' style='padding-top:50vh'>جاري تحميل الصور...</div>";
-
+            container.innerHTML = "<div class='loader' style='padding-top:40vh'>🚀 جاري تحميل الصور...</div>";
+            
             try {
                 const chap = currentChapters[index];
                 const res = await fetch(`${API_URL}/pages/${chap.id}`);
                 const data = await res.json();
                 
                 container.innerHTML = "";
-                data.pages.forEach(url => {
+                // تحميل أول 3 صور فوراً، والباقي Lazy لضمان السرعة القصوى
+                data.pages.forEach((url, i) => {
                     const img = document.createElement('img');
                     img.src = url;
-                    img.loading = "lazy"; // تحسين الأداء
+                    if (i > 2) img.loading = "lazy"; 
                     container.appendChild(img);
                 });
                 
                 window.scrollTo(0,0);
-                
-                // أزرار التنقل
-                document.getElementById('prevChapBtn').disabled = (index === 0);
-                document.getElementById('nextChapBtn').disabled = (index === currentChapters.length - 1);
+                document.getElementById('prevChapBtn').disabled = (index === currentChapters.length - 1); // عكسنا المنطق لأن الترتيب تنازلي
+                document.getElementById('nextChapBtn').disabled = (index === 0);
                 
             } catch (e) { container.innerHTML = "<div class='loader'>فشل تحميل الفصل</div>"; }
         }
 
         function navChapter(delta) {
-            const newIndex = currentChapterIndex + delta;
-            if (newIndex >= 0 && newIndex < currentChapters.length) openReader(newIndex);
+            // انتبه: المصفوفة مرتبة تنازلياً (الأحدث أولاً)
+            // إذا ضغط "التالي" (+1) نريد الذهاب للفصل الأقدم (index + 1)
+            // إذا ضغط "السابق" (-1) نريد الذهاب للفصل الأحدث (index - 1)
+            // هذا المنطق يعتمد على ترتيب المصفوفة من الباك-إند
+            const newIndex = currentChapterIndex - delta; // عكسنا الإشارة لتتناسب مع زر "التالي" = تقدم في القصة
+            
+            if (newIndex >= 0 && newIndex < currentChapters.length) {
+                openReader(newIndex);
+            }
         }
 
-        // --- Navigation Logic ---
         function updateView(viewName) {
-            // إخفاء الكل
             ['home-view', 'favorites-view', 'chapters-view', 'reader-view'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             
-            // إظهار المطلوب
             if (viewName === 'home') document.getElementById('home-view').classList.remove('hidden');
             if (viewName === 'favorites') document.getElementById('favorites-view').classList.remove('hidden');
             if (viewName === 'chapters') document.getElementById('chapters-view').classList.remove('hidden');
             if (viewName === 'reader') document.getElementById('reader-view').classList.remove('hidden');
-
-            // التحكم في العناصر العامة
+            
             const isMain = ['home', 'favorites'].includes(viewName);
             document.getElementById('bottomNav').style.display = viewName === 'reader' ? 'none' : 'flex';
             document.getElementById('mainHeader').style.display = viewName === 'reader' ? 'none' : 'flex';
             
-            // زر الرجوع في تيليجرام
             if (window.Telegram?.WebApp?.BackButton) {
-                if (isMain) window.Telegram.WebApp.BackButton.hide();
-                else window.Telegram.WebApp.BackButton.show();
+                isMain ? window.Telegram.WebApp.BackButton.hide() : window.Telegram.WebApp.BackButton.show();
             }
         }
 
         function goBack() {
             const reader = document.getElementById('reader-view');
             const chapters = document.getElementById('chapters-view');
-            
-            if (!reader.classList.contains('hidden')) {
-                updateView('chapters');
-            } else if (!chapters.classList.contains('hidden')) {
-                updateView('home');
-            }
+            if (!reader.classList.contains('hidden')) updateView('chapters');
+            else if (!chapters.classList.contains('hidden')) updateView('home');
         }
 
         function switchTab(tab) {
