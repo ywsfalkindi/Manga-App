@@ -28,19 +28,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadSeries(query = "") {
     const grid = document.getElementById('series-grid');
+    // عرض التحميل
     grid.innerHTML = Array(6).fill('<div class="manga-card skeleton" style="height:200px"></div>').join('');
     
     try {
         const res = await fetch(`${API_BASE}/series?q=${query}`);
+        
+        // التحقق من أن السيرفر رد بنجاح
+        if (!res.ok) {
+            throw new Error(`Server Error: ${res.status}`);
+        }
+
         const data = await res.json();
         
+        // إذا لم توجد نتائج
+        if (data.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 20px;">لا توجد مانجا مضافة حالياً.</div>';
+            return;
+        }
+
         grid.innerHTML = data.map(s => `
             <div class="manga-card" onclick="openSeries('${s.id}', '${s.title}')">
-                <img src="${s.cover_url}" loading="lazy">
+                <img src="${s.cover_url}" loading="lazy" onerror="this.src='https://via.placeholder.com/200x300?text=No+Image'">
                 <div class="manga-title">${s.title}</div>
             </div>
         `).join('');
-    } catch (e) { console.error(e); }
+
+    } catch (e) { 
+        console.error(e);
+        // عرض الخطأ للمستخدم بدلاً من التحميل الأبدي
+        grid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; color: #ff5555; padding: 20px; border: 1px solid #ff5555; border-radius: 8px;">
+                <h3>حدث خطأ في الاتصال 🔴</h3>
+                <p>${e.message}</p>
+                <button class="btn" onclick="location.reload()" style="background:#333; color:white; margin-top:10px">إعادة المحاولة</button>
+            </div>
+        `;
+    }
 }
 
 async function openSeries(id, title) {
